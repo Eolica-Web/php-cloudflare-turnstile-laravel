@@ -45,6 +45,11 @@
 
                 script.addEventListener('load', render);
             },
+            destroy() {
+                if (this.widgetId !== null) {
+                    window.turnstile.remove(this.widgetId);
+                }
+            },
         }"
         x-modelable="token"
         {{ $attributes }}

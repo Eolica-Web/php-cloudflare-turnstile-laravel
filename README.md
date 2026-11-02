@@ -6,6 +6,7 @@ Laravel integration of [eolica/cloudflare-turnstile](https://github.com/Eolica-W
 
 - PHP 8.5 or higher
 - Laravel 13
+- Livewire 3 or 4, optional, for the [Livewire integration](#livewire)
 
 ## Installation
 
@@ -113,16 +114,9 @@ class Contact extends Component
 
 The widget works with `wire:navigate` and in components rendered after the page loads. It also works with form objects. If the page doesn't include Cloudflare's script, the widget logs an error in the browser's console.
 
-A token can only be validated once, so the widget is reset after validating its token, whether the validation passes or fails. The property returns to its initial value and the visitor gets a new token. You don't need to do anything for this.
+A token can only be verified once, so the widget is reset after Cloudflare verifies its token, whether it passes or fails. The property returns to its initial value and the visitor gets a new token. You don't need to do anything for this.
 
-The token is used up even when another field fails. To ask for a new one only when everything else is valid, validate the token on its own, at the end:
-
-```php
-$this->validate(['email' => ['required', 'email']]);
-$this->validate(['captcha' => [new Turnstile()]]);
-```
-
-The visitor then sees the errors of the other fields first, and the error of the widget in a later submission.
+If another field fails before the token, the token isn't verified, so the visitor keeps it and can submit the form again without solving a new challenge.
 
 ### seophp/head
 
@@ -153,6 +147,8 @@ $request->validate([
 
 The rule fails when the token is missing, so it doesn't need the `required` rule.
 
+Place the rule after the rules of the other fields. When any of them has already failed, the rule doesn't send the token to Cloudflare and doesn't add an error, as the validation fails anyway. This avoids a request and keeps the token unused.
+
 It also sends the visitor's IP address to Cloudflare, taken from `$request->ip()`. If your application runs behind a proxy, such as Cloudflare itself or a load balancer, [configure the trusted proxies](https://laravel.com/docs/requests#configuring-trusted-proxies) so the IP address is the visitor's and not the proxy's. To stop sending it:
 
 ```dotenv
@@ -178,6 +174,27 @@ To customize the error message or translate it, publish the translations:
 ```bash
 php artisan vendor:publish --tag=turnstile-translations
 ```
+
+### Events
+
+The rule dispatches a `TokenVerified` event with Cloudflare's response after each verification, whether it passes or fails. The visitor only sees a generic error, so listen to it to find out why a token was rejected:
+
+```php
+use Eolica\LaravelCloudflareTurnstile\Events\TokenVerified;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
+
+Event::listen(function (TokenVerified $event): void {
+    if (! $event->response->success) {
+        Log::debug('Turnstile rejected a token.', [
+            'action' => $event->action,
+            'errors' => $event->response->errorCodes,
+        ]);
+    }
+});
+```
+
+`$event->response` is the [`VerifyResponse`](https://github.com/Eolica-Web/php-cloudflare-turnstile-core#the-response) returned by the client and `$event->action` the action passed to the rule. The event is not dispatched when the field is missing or isn't a string, when another field has already failed, or when Cloudflare can't be reached and the exception is reported instead.
 
 ## Using the client directly
 
@@ -219,13 +236,15 @@ use Eolica\CloudflareTurnstile\TurnstileClient;
 use Illuminate\Support\Facades\Http;
 
 Http::fake([
-    TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true]),
+    TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true, 'action' => 'contact']),
 ]);
 ```
 
+The rule compares the response with the expected values, so include the `action` you pass to the rule, and the `hostname` if you set `TURNSTILE_HOSTNAME`. Otherwise the rule fails.
+
 `Http::preventStrayRequests()` also prevents real requests to Cloudflare.
 
-To try the widget locally, use Cloudflare's [testing keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/), such as the site key `1x00000000000000000000AA` and the secret key `1x0000000000000000000000000000000AA`, which always pass.
+To try the widget locally, use Cloudflare's [testing keys](https://developers.cloudflare.com/turnstile/troubleshooting/testing/), such as the site key `1x00000000000000000000AA` and the secret key `1x0000000000000000000000000000000AA`, which always pass. The hostname and the action are not checked with the test secret keys, so a rule with an `action` passes too.
 
 ## License
 

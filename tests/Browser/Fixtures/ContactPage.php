@@ -41,6 +41,7 @@ final class ContactPage extends Component
                 </form>
 
                 <button type="button" wire:click="$set('showWidget', true)">Show widget</button>
+                <button type="button" wire:click="$set('showWidget', false)">Hide widget</button>
 
                 <p>Sent: {{ $sent }}</p>
             </div>

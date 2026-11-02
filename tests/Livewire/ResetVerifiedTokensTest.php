@@ -36,7 +36,7 @@ it('resets the token after it is verified', function (): void {
     $component->assertSet('captcha', null);
 });
 
-it('resets the token when the validation of another field fails', function (): void {
+it('keeps the token when the validation of another field fails', function (): void {
     fakeSiteverify();
 
     $component = Livewire::test(ContactForm::class)
@@ -45,7 +45,8 @@ it('resets the token when the validation of another field fails', function (): v
         ->call('submit');
 
     $component->assertHasErrors('email');
-    $component->assertSet('captcha', null);
+    $component->assertHasNoErrors('captcha');
+    $component->assertSet('captcha', 'XXXX.DUMMY.TOKEN.XXXX');
 });
 
 it('resets the token when Cloudflare rejects it', function (): void {

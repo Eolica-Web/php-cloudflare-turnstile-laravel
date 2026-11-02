@@ -74,6 +74,11 @@ it('resets the widget when the bound token is emptied', function (): void {
         ->toContain("'expired-callback': () => { this.solved = false; this.token = null; },");
 });
 
+it('removes the widget when its element is removed', function (): void {
+    expect(renderBlade('<x-turnstile::widget wire:model="captcha" />'))
+        ->toContain('destroy() { if (this.widgetId !== null) { window.turnstile.remove(this.widgetId); } },');
+});
+
 it('fails to render without a site key', function (): void {
     config()->set('turnstile.site_key', null);
 

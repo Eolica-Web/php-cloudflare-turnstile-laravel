@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 use Eolica\CloudflareTurnstile\Exception\HttpException;
 use Eolica\CloudflareTurnstile\TurnstileClient;
+use Eolica\CloudflareTurnstile\VerifyResponse;
+use Eolica\LaravelCloudflareTurnstile\Events\TokenVerified;
 use Eolica\LaravelCloudflareTurnstile\Rules\Turnstile;
 use Eolica\LaravelCloudflareTurnstile\VerifiedTokens;
+use Illuminate\Contracts\Translation\Translator;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Translation\PotentiallyTranslatedString;
 
-covers(Turnstile::class);
+covers(Turnstile::class, TokenVerified::class);
 
 beforeEach(function (): void {
     config()->set('turnstile.secret_key', '1x0000000000000000000000000000000AA');
@@ -74,6 +79,40 @@ it('checks the expected action', function (?string $expectedAction, bool $fails)
     'different action' => ['signup', true],
 ]);
 
+it('dispatches an event with the response of each verification', function (
+    array $body,
+    ?string $action,
+    VerifyResponse $response,
+): void {
+    $events = [];
+    Event::listen(static function (TokenVerified $event) use (&$events): void {
+        $events[] = $event;
+    });
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response($body)]);
+
+    $_ = turnstileValidator([
+        'cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX',
+    ], new Turnstile(action: $action))->fails();
+
+    expect($events)->toEqual([new TokenVerified($response, $action)]);
+})->with([
+    'accepted' => [
+        ['success' => true, 'action' => 'login'],
+        'login',
+        new VerifyResponse(success: true, action: 'login'),
+    ],
+    'rejected by Cloudflare' => [
+        ['success' => false, 'error-codes' => ['timeout-or-duplicate']],
+        null,
+        new VerifyResponse(success: false, errorCodes: ['timeout-or-duplicate']),
+    ],
+    'different action' => [
+        ['success' => true, 'action' => 'login'],
+        'signup',
+        new VerifyResponse(success: false, errorCodes: ['action-mismatch'], action: 'login'),
+    ],
+]);
+
 it('sends the IP address of the request unless disabled', function (bool $config, ?bool $rule, bool $sent): void {
     config()->set('turnstile.send_remote_ip', $config);
     app()->instance('request', Request::create('/', 'POST', server: ['REMOTE_ADDR' => '203.0.113.1']));
@@ -97,8 +136,11 @@ it('sends the IP address of the request unless disabled', function (bool $config
 it('fails without calling Cloudflare when the token is missing', function (): void {
     Http::fake();
 
+    Event::fake([TokenVerified::class]);
+
     expect(turnstileValidator([])->fails())->toBeTrue();
     Http::assertNothingSent();
+    Event::assertNotDispatched(TokenVerified::class);
 });
 
 it('fails without calling Cloudflare when the token is empty or not a string', function (
@@ -115,10 +157,65 @@ it('fails without calling Cloudflare when the token is empty or not a string', f
     'array' => [['XXXX.DUMMY.TOKEN.XXXX']],
 ]);
 
+it('does not verify the token when another field has already failed', function (): void {
+    Event::fake([TokenVerified::class]);
+    Http::fake();
+
+    $validator = validator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], [
+        'email' => ['required'],
+        'cf-turnstile-response' => [new Turnstile()],
+    ]);
+
+    expect($validator->fails())
+        ->toBeTrue()
+        ->and($validator->errors()->keys())
+        ->toBe(['email'])
+        ->and(app(VerifiedTokens::class)->has('XXXX.DUMMY.TOKEN.XXXX'))
+        ->toBeFalse();
+    Http::assertNothingSent();
+    Event::assertNotDispatched(TokenVerified::class);
+});
+
+it('verifies the token when the failing fields come after it', function (): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true])]);
+
+    $validator = validator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], [
+        'cf-turnstile-response' => [new Turnstile()],
+        'email' => ['required'],
+    ]);
+
+    expect($validator->errors()->keys())->toBe(['email']);
+    Http::assertSentCount(1);
+});
+
+it('fails without a token even when another field has already failed', function (): void {
+    $validator = validator([], ['email' => ['required'], 'cf-turnstile-response' => [new Turnstile()]]);
+
+    expect($validator->errors()->keys())->toBe(['email', 'cf-turnstile-response']);
+});
+
+it('verifies the token when used outside a validator', function (): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => false])]);
+    $failed = false;
+
+    new Turnstile()->validate('captcha', 'XXXX.DUMMY.TOKEN.XXXX', static function () use (
+        &$failed,
+    ): PotentiallyTranslatedString {
+        $failed = true;
+
+        return new PotentiallyTranslatedString('turnstile::validation.failed', app(Translator::class));
+    });
+
+    expect($failed)->toBeTrue();
+    Http::assertSentCount(1);
+});
+
 it('fails and reports the exception when Cloudflare cannot be reached', function (): void {
     Exceptions::fake();
+    Event::fake([TokenVerified::class]);
     Http::fake([TurnstileClient::SITEVERIFY_URL => Http::failedConnection()]);
 
     expect(turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'])->fails())->toBeTrue();
     Exceptions::assertReported(HttpException::class);
+    Event::assertNotDispatched(TokenVerified::class);
 });
