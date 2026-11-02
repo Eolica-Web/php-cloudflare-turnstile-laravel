@@ -18,6 +18,15 @@ composer require eolica/laravel-cloudflare-turnstile
 
 The service provider is registered automatically.
 
+This package always requires the same version of [eolica/cloudflare-turnstile](https://github.com/Eolica-Web/php-cloudflare-turnstile-core), so update both together with `--with-dependencies`:
+
+```bash
+composer update eolica/laravel-cloudflare-turnstile --with-dependencies
+
+# Or, to a version outside your current constraint:
+composer require eolica/laravel-cloudflare-turnstile:^0.3 --with-dependencies
+```
+
 ## Configuration
 
 Add your site key and secret key to the `.env` file:
@@ -116,7 +125,7 @@ The widget works with `wire:navigate` and in components rendered after the page 
 
 A token can only be verified once, so the widget is reset after Cloudflare verifies its token, whether it passes or fails. The property returns to its initial value and the visitor gets a new token. You don't need to do anything for this.
 
-If another field fails before the token, the token isn't verified, so the visitor keeps it and can submit the form again without solving a new challenge.
+If another field fails, the token isn't verified, so the visitor keeps it and can submit the form again without solving a new challenge.
 
 ### seophp/head
 
@@ -145,9 +154,9 @@ $request->validate([
 ]);
 ```
 
-The rule fails when the token is missing, so it doesn't need the `required` rule.
+The token is only checked once every other field passes, wherever the rule is placed. When another field fails, the rule doesn't send the token to Cloudflare and doesn't add an error, as the validation fails anyway. This avoids a request and keeps the token unused.
 
-Place the rule after the rules of the other fields. When any of them has already failed, the rule doesn't send the token to Cloudflare and doesn't add an error, as the validation fails anyway. This avoids a request and keeps the token unused.
+The rule fails when the token is missing, so it doesn't need the `required` rule.
 
 It also sends the visitor's IP address to Cloudflare, taken from `$request->ip()`. If your application runs behind a proxy, such as Cloudflare itself or a load balancer, [configure the trusted proxies](https://laravel.com/docs/requests#configuring-trusted-proxies) so the IP address is the visitor's and not the proxy's. To stop sending it:
 
@@ -175,6 +184,15 @@ To customize the error message or translate it, publish the translations:
 php artisan vendor:publish --tag=turnstile-translations
 ```
 
+Or set a custom message for a single form with the `turnstile` key, as with any other rule:
+
+```php
+$request->validate(
+    ['cf-turnstile-response' => [new Turnstile()]],
+    ['cf-turnstile-response.turnstile' => 'Please confirm you are human.'],
+);
+```
+
 ### Events
 
 The rule dispatches a `TokenVerified` event with Cloudflare's response after each verification, whether it passes or fails. The visitor only sees a generic error, so listen to it to find out why a token was rejected:
@@ -194,7 +212,7 @@ Event::listen(function (TokenVerified $event): void {
 });
 ```
 
-`$event->response` is the [`VerifyResponse`](https://github.com/Eolica-Web/php-cloudflare-turnstile-core#the-response) returned by the client and `$event->action` the action passed to the rule. The event is not dispatched when the field is missing or isn't a string, when another field has already failed, or when Cloudflare can't be reached and the exception is reported instead.
+`$event->response` is the [`VerifyResponse`](https://github.com/Eolica-Web/php-cloudflare-turnstile-core#the-response) returned by the client and `$event->action` the action passed to the rule. The event is not dispatched when the field is missing or isn't a string, when another field fails, or when Cloudflare can't be reached and the exception is reported instead.
 
 ## Using the client directly
 

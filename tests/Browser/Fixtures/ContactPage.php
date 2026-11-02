@@ -19,7 +19,7 @@ final class ContactPage extends Component
 
     public function send(): void
     {
-        $this->validate(['email' => ['required', 'email'], 'captcha' => [new Turnstile()]]);
+        $this->validate(['captcha' => [new Turnstile()], 'email' => ['required', 'email']]);
 
         $this->sent++;
     }

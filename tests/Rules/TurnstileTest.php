@@ -65,6 +65,21 @@ it('fails with a translated message when Cloudflare rejects the token', function
         ->toBe('The verification failed. Please try again.');
 });
 
+it('uses the custom messages of the validator', function (string $key): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => false])]);
+
+    $validator = validator(
+        ['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'],
+        ['cf-turnstile-response' => [new Turnstile()]],
+        [$key => 'Please prove you are human.'],
+    );
+
+    expect($validator->errors()->first('cf-turnstile-response'))
+        ->toBe('Please prove you are human.')
+        ->and($validator->failed())
+        ->toBe(['cf-turnstile-response' => ['turnstile' => []]]);
+})->with(['cf-turnstile-response.turnstile', 'cf-turnstile-response', 'turnstile']);
+
 it('checks the expected action', function (?string $expectedAction, bool $fails): void {
     Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true, 'action' => 'login'])]);
 
@@ -157,14 +172,11 @@ it('fails without calling Cloudflare when the token is empty or not a string', f
     'array' => [['XXXX.DUMMY.TOKEN.XXXX']],
 ]);
 
-it('does not verify the token when another field has already failed', function (): void {
+it('does not verify the token when another field fails', function (array $rules): void {
     Event::fake([TokenVerified::class]);
     Http::fake();
 
-    $validator = validator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], [
-        'email' => ['required'],
-        'cf-turnstile-response' => [new Turnstile()],
-    ]);
+    $validator = validator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], $rules);
 
     expect($validator->fails())
         ->toBeTrue()
@@ -174,24 +186,27 @@ it('does not verify the token when another field has already failed', function (
         ->toBeFalse();
     Http::assertNothingSent();
     Event::assertNotDispatched(TokenVerified::class);
+})->with([
+    'before the token' => [['email' => ['required'], 'cf-turnstile-response' => [new Turnstile()]]],
+    'after the token' => [['cf-turnstile-response' => [new Turnstile()], 'email' => ['required']]],
+]);
+
+it('does not fail without a token when another field fails', function (): void {
+    $validator = validator([], ['cf-turnstile-response' => [new Turnstile()], 'email' => ['required']]);
+
+    expect($validator->errors()->keys())->toBe(['email']);
 });
 
-it('verifies the token when the failing fields come after it', function (): void {
+it('verifies the token when the other fields pass', function (): void {
     Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true])]);
 
-    $validator = validator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], [
+    $validator = validator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX', 'email' => 'john@example.com'], [
         'cf-turnstile-response' => [new Turnstile()],
         'email' => ['required'],
     ]);
 
-    expect($validator->errors()->keys())->toBe(['email']);
+    expect($validator->fails())->toBeFalse();
     Http::assertSentCount(1);
-});
-
-it('fails without a token even when another field has already failed', function (): void {
-    $validator = validator([], ['email' => ['required'], 'cf-turnstile-response' => [new Turnstile()]]);
-
-    expect($validator->errors()->keys())->toBe(['email', 'cf-turnstile-response']);
 });
 
 it('verifies the token when used outside a validator', function (): void {

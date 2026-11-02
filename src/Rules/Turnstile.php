@@ -21,6 +21,8 @@ use SensitiveParameter;
 
 final class Turnstile implements ValidationRule, ValidatorAwareRule
 {
+    private const string MESSAGE = 'turnstile::validation.failed';
+
     public bool $implicit = true;
 
     private ?Validator $validator = null;
@@ -39,18 +41,27 @@ final class Turnstile implements ValidationRule, ValidatorAwareRule
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (is_string($value) && $this->otherFieldsFailed()) {
+        if ($this->validator === null) {
+            if (!$this->passes($value)) {
+                $fail(self::MESSAGE)->translate();
+            }
+
             return;
         }
 
-        if (!is_string($value) || !$this->verify($value)) {
-            $fail('turnstile::validation.failed')->translate();
-        }
+        $this->validator->after(function (Validator $validator) use ($attribute, $value): void {
+            if ($validator->messages()->isNotEmpty() || $this->passes($value)) {
+                return;
+            }
+
+            $validator->fallbackMessages['turnstile'] = $validator->getTranslator()->get(self::MESSAGE);
+            $validator->addFailure($attribute, 'turnstile');
+        });
     }
 
-    private function otherFieldsFailed(): bool
+    private function passes(mixed $value): bool
     {
-        return $this->validator?->messages()->isNotEmpty() ?? false;
+        return is_string($value) && $this->verify($value);
     }
 
     private function verify(#[SensitiveParameter] string $token): bool
