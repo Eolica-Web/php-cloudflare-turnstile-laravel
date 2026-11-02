@@ -20,7 +20,7 @@
     "homepage": "https://github.com/Eolica-Web/php-cloudflare-turnstile-laravel",
     "require": {
         "php": "^8.5",
-        "eolica/cloudflare-turnstile": "dev-main",
+        "eolica/cloudflare-turnstile": "self.version",
         "guzzlehttp/psr7": "^2.4 || ^3.0",
         "illuminate/config": "^13.0",
         "illuminate/container": "^13.0",
