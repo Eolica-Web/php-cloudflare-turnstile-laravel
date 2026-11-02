@@ -7,7 +7,7 @@ use Eolica\CloudflareTurnstile\TurnstileClient;
 use Eolica\CloudflareTurnstile\VerifyResponse;
 use Eolica\LaravelCloudflareTurnstile\Events\TokenVerified;
 use Eolica\LaravelCloudflareTurnstile\Rules\Turnstile;
-use Eolica\LaravelCloudflareTurnstile\VerifiedTokens;
+use Eolica\LaravelCloudflareTurnstile\TokenVerifications;
 use Illuminate\Contracts\Translation\Translator;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -42,11 +42,11 @@ it('records the verified tokens per request', function (): void {
 
     $_ = turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'])->fails();
 
-    expect(app(VerifiedTokens::class)->has('XXXX.DUMMY.TOKEN.XXXX'))->toBeTrue();
+    expect(app(TokenVerifications::class)->has('XXXX.DUMMY.TOKEN.XXXX'))->toBeTrue();
 
     app()->forgetScopedInstances();
 
-    expect(app(VerifiedTokens::class)->has('XXXX.DUMMY.TOKEN.XXXX'))->toBeFalse();
+    expect(app(TokenVerifications::class)->has('XXXX.DUMMY.TOKEN.XXXX'))->toBeFalse();
 });
 
 it('fails with a translated message when Cloudflare rejects the token', function (): void {
@@ -182,7 +182,7 @@ it('does not verify the token when another field fails', function (array $rules)
         ->toBeTrue()
         ->and($validator->errors()->keys())
         ->toBe(['email'])
-        ->and(app(VerifiedTokens::class)->has('XXXX.DUMMY.TOKEN.XXXX'))
+        ->and(app(TokenVerifications::class)->has('XXXX.DUMMY.TOKEN.XXXX'))
         ->toBeFalse();
     Http::assertNothingSent();
     Event::assertNotDispatched(TokenVerified::class);
@@ -206,6 +206,54 @@ it('verifies the token when the other fields pass', function (): void {
     ]);
 
     expect($validator->fails())->toBeFalse();
+    Http::assertSentCount(1);
+});
+
+it('verifies the token once when the validator runs more than once', function (bool $success): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => $success])]);
+
+    $validator = turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX']);
+
+    expect($validator->fails())
+        ->toBe(!$success)
+        ->and($validator->fails())
+        ->toBe(!$success)
+        ->and($validator->errors()->get('cf-turnstile-response'))
+        ->toHaveCount($success ? 0 : 1);
+    Http::assertSentCount(1);
+})->with([true, false]);
+
+it('reuses the result of a token verified earlier in the request', function (): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true])]);
+
+    expect(turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'])->fails())
+        ->toBeFalse()
+        ->and(turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'])->fails())
+        ->toBeFalse();
+    Http::assertSentCount(1);
+});
+
+it('only validates the fields of the current validator', function (): void {
+    Http::fake([
+        TurnstileClient::SITEVERIFY_URL => Http::sequence()->push(['success' => false])->push(['success' => true]),
+    ]);
+    $rule = new Turnstile();
+
+    $first = validator(['first' => 'XXXX.FIRST.TOKEN.XXXX'], ['first' => [$rule]]);
+    $second = validator(['second' => 'XXXX.SECOND.TOKEN.XXXX'], ['second' => [$rule]]);
+
+    expect($first->errors()->keys())->toBe(['first'])->and($second->errors()->keys())->toBe([]);
+});
+
+it('stops verifying tokens once one of them fails', function (): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => false])]);
+
+    $validator = validator(['captchas' => [
+        'XXXX.FIRST.TOKEN.XXXX',
+        'XXXX.SECOND.TOKEN.XXXX',
+    ]], ['captchas.*' => [new Turnstile()]]);
+
+    expect($validator->errors()->keys())->toBe(['captchas.0']);
     Http::assertSentCount(1);
 });
 

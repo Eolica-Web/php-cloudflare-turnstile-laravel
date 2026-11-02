@@ -27,7 +27,7 @@ final class TurnstileServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(self::CONFIG_PATH, 'turnstile');
 
-        $this->app->scoped(VerifiedTokens::class);
+        $this->app->scoped(TokenVerifications::class);
 
         $this->callAfterResolving(LivewireManager::class, static function (LivewireManager $livewire): void {
             $livewire->componentHook(ResetVerifiedTokens::class);

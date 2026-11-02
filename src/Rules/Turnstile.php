@@ -8,7 +8,7 @@ use Closure;
 use Eolica\CloudflareTurnstile\Exception\TurnstileException;
 use Eolica\CloudflareTurnstile\TurnstileClient;
 use Eolica\LaravelCloudflareTurnstile\Events\TokenVerified;
-use Eolica\LaravelCloudflareTurnstile\VerifiedTokens;
+use Eolica\LaravelCloudflareTurnstile\TokenVerifications;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Debug\ExceptionHandler;
@@ -27,6 +27,11 @@ final class Turnstile implements ValidationRule, ValidatorAwareRule
 
     private ?Validator $validator = null;
 
+    /**
+     * @var array<string, mixed>
+     */
+    private array $values = [];
+
     public function __construct(
         private readonly ?string $action = null,
         private readonly ?bool $sendRemoteIp = null,
@@ -34,7 +39,12 @@ final class Turnstile implements ValidationRule, ValidatorAwareRule
 
     public function setValidator(Validator $validator): static
     {
-        $this->validator = $validator;
+        if ($this->validator !== $validator) {
+            $this->validator = $validator;
+            $this->values = [];
+
+            $validator->after($this->validateAfterOtherFields(...));
+        }
 
         return $this;
     }
@@ -49,14 +59,21 @@ final class Turnstile implements ValidationRule, ValidatorAwareRule
             return;
         }
 
-        $this->validator->after(function (Validator $validator) use ($attribute, $value): void {
-            if ($validator->messages()->isNotEmpty() || $this->passes($value)) {
+        $this->values[$attribute] = $value;
+    }
+
+    private function validateAfterOtherFields(Validator $validator): void
+    {
+        foreach ($this->values as $attribute => $value) {
+            if ($validator->messages()->isNotEmpty()) {
                 return;
             }
 
-            $validator->fallbackMessages['turnstile'] = $validator->getTranslator()->get(self::MESSAGE);
-            $validator->addFailure($attribute, 'turnstile');
-        });
+            if (!$this->passes($value)) {
+                $validator->fallbackMessages['turnstile'] = $validator->getTranslator()->get(self::MESSAGE);
+                $validator->addFailure($attribute, 'turnstile');
+            }
+        }
     }
 
     private function passes(mixed $value): bool
@@ -67,8 +84,18 @@ final class Turnstile implements ValidationRule, ValidatorAwareRule
     private function verify(#[SensitiveParameter] string $token): bool
     {
         $container = Container::getInstance();
-        $container->make(VerifiedTokens::class)->add($token);
 
+        $verifications = $container->make(TokenVerifications::class);
+
+        if (!$verifications->has($token)) {
+            $verifications->add($token, $this->send($container, $token));
+        }
+
+        return $verifications->passed($token);
+    }
+
+    private function send(Container $container, #[SensitiveParameter] string $token): bool
+    {
         try {
             $response = $container
                 ->make(TurnstileClient::class)

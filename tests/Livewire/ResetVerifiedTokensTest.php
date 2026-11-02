@@ -5,13 +5,13 @@ declare(strict_types=1);
 use Eolica\CloudflareTurnstile\TurnstileClient;
 use Eolica\LaravelCloudflareTurnstile\Livewire\ResetVerifiedTokens;
 use Eolica\LaravelCloudflareTurnstile\Tests\Livewire\Fixtures\ContactForm;
+use Eolica\LaravelCloudflareTurnstile\TokenVerifications;
 use Eolica\LaravelCloudflareTurnstile\TurnstileServiceProvider;
-use Eolica\LaravelCloudflareTurnstile\VerifiedTokens;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use Livewire\LivewireServiceProvider;
 
-covers(ResetVerifiedTokens::class, TurnstileServiceProvider::class, VerifiedTokens::class);
+covers(ResetVerifiedTokens::class, TurnstileServiceProvider::class, TokenVerifications::class);
 
 beforeEach(function (): void {
     config()->set('turnstile.secret_key', '1x0000000000000000000000000000000AA');
