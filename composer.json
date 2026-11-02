@@ -1,0 +1,54 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "eolica/laravel-cloudflare-turnstile",
+    "description": "Cloudflare Turnstile integration for Laravel",
+    "license": "MIT",
+    "type": "library",
+    "keywords": [
+        "cloudflare",
+        "turnstile",
+        "captcha",
+        "laravel"
+    ],
+    "authors": [
+        {
+            "name": "David Llobell",
+            "email": "dllobell@eolicadigital.com",
+            "role": "Developer"
+        }
+    ],
+    "homepage": "https://github.com/Eolica-Web/php-cloudflare-turnstile-laravel",
+    "require": {
+        "php": "^8.5",
+        "eolica/cloudflare-turnstile": "dev-main",
+        "guzzlehttp/psr7": "^2.4 || ^3.0",
+        "illuminate/config": "^13.0",
+        "illuminate/container": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/support": "^13.0",
+        "illuminate/validation": "^13.0",
+        "illuminate/view": "^13.0",
+        "psr/http-client": "^1.0",
+        "psr/http-message": "^2.0"
+    },
+    "suggest": {
+        "livewire/livewire": "Resets the widget in Livewire components after its token is verified",
+        "seophp/head-laravel": "Adds the Turnstile script to the <head> managed by seophp/head with TurnstilePlugin"
+    },
+    "autoload": {
+        "psr-4": {
+            "Eolica\\LaravelCloudflareTurnstile\\": "src"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Eolica\\LaravelCloudflareTurnstile\\TurnstileServiceProvider"
+            ]
+        }
+    }
+}
