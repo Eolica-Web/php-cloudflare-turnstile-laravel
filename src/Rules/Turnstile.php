@@ -88,10 +88,10 @@ final class Turnstile implements ValidationRule, ValidatorAwareRule
         $verifications = $container->make(TokenVerifications::class);
 
         if (!$verifications->has($token)) {
-            $verifications->add($token, $this->send($container, $token));
+            $verifications->add($token, $this->action, $this->send($container, $token));
         }
 
-        return $verifications->passed($token);
+        return $verifications->passed($token, $this->action);
     }
 
     private function send(Container $container, #[SensitiveParameter] string $token): bool

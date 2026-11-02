@@ -233,6 +233,16 @@ it('reuses the result of a token verified earlier in the request', function (): 
     Http::assertSentCount(1);
 });
 
+it('fails without calling Cloudflare again when the token was verified for another action', function (): void {
+    Http::fake([TurnstileClient::SITEVERIFY_URL => Http::response(['success' => true, 'action' => 'login'])]);
+
+    $login = turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], new Turnstile(action: 'login'));
+    $signup = turnstileValidator(['cf-turnstile-response' => 'XXXX.DUMMY.TOKEN.XXXX'], new Turnstile(action: 'signup'));
+
+    expect($login->fails())->toBeFalse()->and($signup->fails())->toBeTrue();
+    Http::assertSentCount(1);
+});
+
 it('only validates the fields of the current validator', function (): void {
     Http::fake([
         TurnstileClient::SITEVERIFY_URL => Http::sequence()->push(['success' => false])->push(['success' => true]),
