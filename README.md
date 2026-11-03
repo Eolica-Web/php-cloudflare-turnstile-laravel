@@ -58,7 +58,7 @@ Include Cloudflare's script once in your layout, for example in the `<head>`:
 </head>
 ```
 
-Any attribute, such as a `nonce`, is added to the `<script>` tag. Include it in the layout itself, not inside a Livewire component: the scripts Livewire adds to the page when it updates a component don't run.
+It also adds a `preconnect` hint so the browser connects to Cloudflare early. Any attribute, such as a `nonce`, is added to the `<script>` tag. Include it in the layout itself, not inside a Livewire component: the scripts Livewire adds to the page when it updates a component don't run.
 
 Then add the widget inside your form:
 
@@ -88,6 +88,8 @@ Configure the widget with any of these attributes:
 ```
 
 See [Cloudflare's widget configuration](https://developers.cloudflare.com/turnstile/get-started/client-side-rendering/widget-configurations/) for the values each one accepts. Any other attribute, such as `class` or `data-callback`, is added to the widget's container.
+
+The widget is shown in your application's locale unless you set a `language`, and in English if Cloudflare doesn't [support that language](https://developers.cloudflare.com/turnstile/reference/supported-languages/). Use `language="auto"` to show it in the visitor's browser language instead.
 
 ### Livewire
 
@@ -129,7 +131,7 @@ If another field fails, the token isn't verified, so the visitor keeps it and ca
 
 ### seophp/head
 
-If your application uses [seophp/head-laravel](https://github.com/seo-php/head-laravel), add Cloudflare's script to the `<head>` it renders with the `TurnstilePlugin`, instead of the `script` component:
+If your application uses [seophp/head-laravel](https://github.com/seo-php/head-laravel), add Cloudflare's script and the `preconnect` hint to the `<head>` it renders with the `TurnstilePlugin`, instead of the `script` component:
 
 ```php
 use Eolica\LaravelCloudflareTurnstile\Head\TurnstilePlugin;

@@ -10,7 +10,9 @@ use Override;
 
 final class Script extends Component
 {
-    public const string URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    public const string ORIGIN = 'https://challenges.cloudflare.com';
+
+    public const string URL = self::ORIGIN . '/turnstile/v0/api.js';
 
     #[Override]
     public function render(): View

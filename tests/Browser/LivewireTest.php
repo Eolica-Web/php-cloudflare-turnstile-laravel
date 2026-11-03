@@ -178,6 +178,24 @@ it('removes the widget when it is no longer rendered', function (): void {
         ->assertNoJavaScriptErrors();
 });
 
+it('does not keep the token of a removed widget', function (): void {
+    $page = visit('/contact')->assertScript(waitForToken(), true);
+
+    $page->script(<<<'JS'
+        () => {
+            window.turnstile.render = () => 'unsolved';
+        }
+        JS);
+
+    $page
+        ->press('Hide widget')
+        ->assertMissing('[x-modelable="token"]')
+        ->assertScript('Livewire.first().captcha', 'XXXX.DUMMY.TOKEN.XXXX')
+        ->press('Show widget')
+        ->assertPresent('[x-modelable="token"]')
+        ->assertScript('Livewire.first().captcha', null);
+});
+
 it('renders the widget after navigating with wire:navigate', function (): void {
     visit('/home')
         ->click('Contact')

@@ -10,6 +10,8 @@ use Seo\Head\HeadPlugin;
 
 final readonly class TurnstilePlugin implements HeadPlugin
 {
+    public const string PRECONNECT_ID = 'cf-turnstile-preconnect';
+
     public const string SCRIPT_ID = 'cf-turnstile-api';
 
     private function __construct() {}
@@ -21,6 +23,7 @@ final readonly class TurnstilePlugin implements HeadPlugin
 
     public function initialize(Head $head): void
     {
+        $head->link(href: Script::ORIGIN, id: self::PRECONNECT_ID, rel: 'preconnect');
         $head->script(async: true, defer: true, id: self::SCRIPT_ID, src: Script::URL);
     }
 }

@@ -6,6 +6,8 @@
             widgetId: null,
             solved: false,
             init() {
+                this.$nextTick(() => this.token = null);
+
                 this.$watch('token', (token) => {
                     if (token || !this.solved) {
                         return;

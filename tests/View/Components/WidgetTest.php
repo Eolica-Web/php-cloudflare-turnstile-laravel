@@ -19,7 +19,7 @@ function renderBlade(string $template): string
 
 it('renders the standard Cloudflare markup without wire:model', function (): void {
     expect(renderBlade('<x-turnstile::widget />'))
-        ->toBe('<div data-sitekey="1x00000000000000000000AA" class="cf-turnstile"></div>');
+        ->toBe('<div data-sitekey="1x00000000000000000000AA" data-language="en" class="cf-turnstile"></div>');
 });
 
 it('renders the widget options as data attributes', function (): void {
@@ -33,10 +33,19 @@ it('renders the widget options as data attributes', function (): void {
     );
 });
 
+it('uses the application locale as the default language', function (string $locale, string $language): void {
+    app()->setLocale($locale);
+
+    expect(renderBlade('<x-turnstile::widget />'))->toContain(sprintf('data-language="%s"', $language));
+})->with([
+    'language' => ['es', 'es'],
+    'language and region' => ['pt_BR', 'pt-BR'],
+]);
+
 it('passes any other attribute to the widget container', function (): void {
     expect(renderBlade('<x-turnstile::widget class="mt-4" data-callback="onSuccess" />'))
         ->toContain(
-            '<div data-sitekey="1x00000000000000000000AA" class="cf-turnstile mt-4" data-callback="onSuccess"></div>',
+            '<div data-sitekey="1x00000000000000000000AA" data-language="en" class="cf-turnstile mt-4" data-callback="onSuccess"></div>',
         );
 });
 
@@ -50,7 +59,7 @@ it('renders the widget from JavaScript and binds the token with wire:model', fun
         ->toContain('x-modelable="token"')
         ->toContain('wire:model="captcha"')
         ->toContain(
-            "window.turnstile.render(this.\$el, { ...JSON.parse('{\\u0022sitekey\\u0022:\\u00221x00000000000000000000AA\\u0022,\\u0022action\\u0022:\\u0022login\\u0022}'), 'response-field': false,",
+            "window.turnstile.render(this.\$el, { ...JSON.parse('{\\u0022sitekey\\u0022:\\u00221x00000000000000000000AA\\u0022,\\u0022action\\u0022:\\u0022login\\u0022,\\u0022language\\u0022:\\u0022en\\u0022}'), 'response-field': false,",
         );
 });
 
@@ -74,6 +83,11 @@ it('resets the widget when the bound token is emptied', function (): void {
         ->toContain("'expired-callback': () => { this.solved = false; this.token = null; },");
 });
 
+it('starts without the token of a previous widget', function (): void {
+    expect(renderBlade('<x-turnstile::widget wire:model="captcha" />'))
+        ->toContain('init() { this.$nextTick(() => this.token = null);');
+});
+
 it('removes the widget when its element is removed', function (): void {
     expect(renderBlade('<x-turnstile::widget wire:model="captcha" />'))
         ->toContain('destroy() { if (this.widgetId !== null) { window.turnstile.remove(this.widgetId); } },');
@@ -88,13 +102,13 @@ it('fails to render without a site key', function (): void {
 it('renders the script', function (): void {
     expect(renderBlade('<x-turnstile::script />'))
         ->toBe(
-            '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer data-navigate-once ></script>',
+            '<link rel="preconnect" href="https://challenges.cloudflare.com"> <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer data-navigate-once ></script>',
         );
 });
 
 it('renders the script with any extra attribute', function (): void {
     expect(renderBlade('<x-turnstile::script nonce="abc" />'))
         ->toBe(
-            '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer data-navigate-once nonce="abc"></script>',
+            '<link rel="preconnect" href="https://challenges.cloudflare.com"> <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer data-navigate-once nonce="abc"></script>',
         );
 });

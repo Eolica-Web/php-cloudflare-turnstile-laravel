@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Eolica\LaravelCloudflareTurnstile\View\Components;
 
 use Illuminate\Config\Repository;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\View\View;
 use Illuminate\View\Component;
 use Override;
@@ -18,6 +19,7 @@ final class Widget extends Component
 
     public function __construct(
         Repository $config,
+        Application $app,
         ?string $action = null,
         ?string $cdata = null,
         ?string $theme = null,
@@ -32,7 +34,7 @@ final class Widget extends Component
                 'cData' => $cdata,
                 'theme' => $theme,
                 'size' => $size,
-                'language' => $language,
+                'language' => $language ?? str_replace('_', replace: '-', subject: $app->getLocale()),
                 'appearance' => $appearance,
             ],
             is_string(...),
